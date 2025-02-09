@@ -50,12 +50,12 @@ func main() {
 		os.Exit(0)
 	}
 	tx := &smpp.Transceiver{
-		Addr:   o.SMPPAddr,
-		User:   os.Getenv("SMPP_USER"),
-		Passwd: os.Getenv("SMPP_PASSWD"),
+		Addr:   os.Getenv("NESO_SMSC_HOST_AND_PORT"),
+		User:   os.Getenv("NESO_SMPP_USERNAME"),
+		Passwd: os.Getenv("NESO_SMPP_PASSWORD"),
 	}
 	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt, os.Kill)
+	signal.Notify(exit, os.Interrupt)
 	go func() {
 		<-exit
 		tx.Close()
@@ -103,7 +103,7 @@ func main() {
 }
 
 func ParseOpts() *Opts {
-	o := &Opts{ListenAddr: ":8080", SMPPAddr: "localhost:2775", LogTS: true}
+	o := &Opts{ListenAddr: ":8080", SMPPAddr: os.Getenv("NESO_SMSC_HOST_AND_PORT"), LogTS: true}
 	flag.StringVar(&o.ListenAddr, "http", o.ListenAddr, "host:port to listen on for http or https")
 	flag.StringVar(&o.APIPrefix, "prefix", o.APIPrefix, "prefix for http(s) endpoints")
 	flag.StringVar(&o.PublicDir, "public", o.PublicDir, "public dir to serve under \"/\", optional")
