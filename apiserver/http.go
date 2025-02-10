@@ -7,6 +7,7 @@ package apiserver
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"io"
 	"net/http"
 	"net/rpc"
@@ -40,6 +41,9 @@ type Handler struct {
 
 	// sm for smpp functionality
 	sm *SM
+
+	// Logger for logging the events as the handler works
+	Logger zerolog.Logger
 }
 
 func (h *Handler) init() {
@@ -77,28 +81,44 @@ func urlprefix(h *Handler) string {
 
 func (h *Handler) send() http.Handler {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		r.ParseMultipartForm(1 << 20)
+		err := r.ParseMultipartForm(1 << 20)
+		if err != nil {
+			h.Logger.Fatal().Str("Event", " Parsing Multipart Form error:").Msg(err.Error())
+			return
+		}
 		resp, status, err := h.sm.submit(r.Form)
 		if err != nil {
 			http.Error(w, err.Error(), status)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
+		if err != nil {
+			h.Logger.Fatal().Str("Event", "JSON Encoding error: ").Msg(err.Error())
+			return
+		}
 	}
 	return auth(cors(f, "PUT", "POST"))
 }
 
 func (h *Handler) query() http.Handler {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		err := r.ParseForm()
+		if err != nil {
+			h.Logger.Fatal().Str("Event", "Delivery receipt query error: ").Msg(err.Error())
+			return
+		}
 		resp, status, err := h.sm.query(r.Form)
 		if err != nil {
 			http.Error(w, err.Error(), status)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
+		if err != nil {
+			h.Logger.Fatal().Str("Event", "JSON Encoding error: ").Msg(err.Error())
+			return
+		}
 	}
 	return auth(cors(f, "HEAD", "GET"))
 }

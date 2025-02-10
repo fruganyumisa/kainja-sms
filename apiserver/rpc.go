@@ -5,7 +5,9 @@
 package apiserver
 
 import (
+	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"net/http"
 	"net/rpc"
 	"net/url"
@@ -16,8 +18,9 @@ import (
 
 // SM export its public methods to JSON RPC.
 type SM struct {
-	tx  *smpp.Transceiver
-	rpc *rpc.Server
+	tx     *smpp.Transceiver
+	rpc    *rpc.Server
+	Logger zerolog.Logger
 }
 
 // NewSM creates and initializes a new SM, registering its own
@@ -27,7 +30,11 @@ func NewSM(tx *smpp.Transceiver, rs *rpc.Server) *SM {
 		tx:  tx,
 		rpc: rs,
 	}
-	sm.rpc.Register(sm) // hax more
+	err := sm.rpc.Register(sm)
+	if err != nil {
+
+		return nil
+	} // hax more
 	return sm
 }
 
@@ -56,6 +63,7 @@ func (rpc *SM) Submit(args *ShortMessage, resp *ShortMessageResp) error {
 	}
 	r, s, err := rpc.submit(req)
 	if err != nil {
+		rpc.Logger.Fatal().Str("Event", "SMS Submit to SMSC error:").Msg(err.Error())
 		return fmt.Errorf("%d %s: %v", s, http.StatusText(s), err)
 	}
 	*resp = *r
@@ -66,13 +74,14 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 	sm := &smpp.ShortMessage{}
 	var msg, enc, register string
 	f := form{
-		{"src", "number of sender", false, nil, &sm.Src},
-		{"dst", "number of recipient", true, nil, &sm.Dst},
+		{"src", "sender Header", false, nil, &sm.Src},
+		{"dst", "recipient number", true, nil, &sm.Dst},
 		{"text", "text message", true, nil, &msg},
 		{"enc", "text encoding", false, []string{"latin1", "ucs2"}, &enc},
 		{"register", "registered delivery", false, []string{"final", "failure"}, &register},
 	}
 	if err := f.Validate(req); err != nil {
+		rpc.Logger.Fatal().Str("Event", "Request form validation error: ").Msg(err.Error())
 		return nil, http.StatusBadRequest, err
 	}
 	switch enc {
@@ -90,10 +99,12 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 		sm.Register = smpp.FailureDeliveryReceipt
 	}
 	sm, err = rpc.tx.Submit(sm)
-	if err == smpp.ErrNotConnected {
+	if errors.Is(err, smpp.ErrNotConnected) {
+		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusServiceUnavailable, err
 	}
 	if err != nil {
+		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusBadGateway, err
 	}
 	resp = &ShortMessageResp{MessageID: sm.RespID()}
@@ -121,6 +132,7 @@ func (rpc *SM) Query(args *QueryMessage, resp *QueryMessageResp) error {
 	}
 	r, s, err := rpc.query(req)
 	if err != nil {
+		rpc.Logger.Fatal().Str("Event", "SMS Status query error: ").Msg(err.Error())
 		return fmt.Errorf("%d %s: %v", s, http.StatusText(s), err)
 	}
 	*resp = *r
@@ -136,7 +148,7 @@ func (rpc *SM) query(req url.Values) (resp *QueryMessageResp, status int, err er
 		return nil, http.StatusBadRequest, err
 	}
 	qr, err := rpc.tx.QuerySM(req.Get("src"), req.Get("message_id"))
-	if err == smpp.ErrNotConnected {
+	if errors.Is(err, smpp.ErrNotConnected) {
 		return nil, http.StatusServiceUnavailable, err
 	}
 	if err != nil {

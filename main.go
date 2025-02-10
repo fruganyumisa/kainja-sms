@@ -21,6 +21,7 @@ import (
 
 	"github.com/fiorix/go-smpp/smpp"
 	"github.com/go-web/httplog"
+	"github.com/rs/zerolog"
 
 	"github.com/fiorix/sms-api-server/apiserver"
 )
@@ -41,7 +42,12 @@ type Opts struct {
 	ClientTLS         bool
 	ClientTLSInsecure bool
 	ShowVersion       bool
+	Logger            zerolog.Logger
 }
+
+var (
+	logger zerolog.Logger
+)
 
 func main() {
 	o := ParseOpts()
@@ -58,7 +64,11 @@ func main() {
 	signal.Notify(exit, os.Interrupt)
 	go func() {
 		<-exit
-		tx.Close()
+		err := tx.Close()
+		if err != nil {
+
+			return
+		}
 		os.Exit(0)
 	}()
 	if o.ClientTLS {
@@ -98,12 +108,13 @@ func main() {
 	}
 	err := ListenAndServe(o, mux)
 	if err != nil {
+		o.Logger.Fatal().Str("Event", "Server start error  ").Msg(err.Error())
 		log.Fatal(err)
 	}
 }
 
 func ParseOpts() *Opts {
-	o := &Opts{ListenAddr: ":8080", SMPPAddr: os.Getenv("NESO_SMSC_HOST_AND_PORT"), LogTS: true}
+	o := &Opts{ListenAddr: ":8443", SMPPAddr: os.Getenv("NESO_SMSC_HOST_AND_PORT"), LogTS: true, Log: true, Logger: logger}
 	flag.StringVar(&o.ListenAddr, "http", o.ListenAddr, "host:port to listen on for http or https")
 	flag.StringVar(&o.APIPrefix, "prefix", o.APIPrefix, "prefix for http(s) endpoints")
 	flag.StringVar(&o.PublicDir, "public", o.PublicDir, "public dir to serve under \"/\", optional")
@@ -131,6 +142,7 @@ func ParseOpts() *Opts {
 func ListenAndServe(o *Opts, f http.Handler) error {
 	s := &http.Server{Addr: o.ListenAddr, Handler: f}
 	if o.CertFile == "" || o.KeyFile == "" {
+		o.Logger.Info().Str("Event", "HTTP Server Started without SSL AT address: ").Msg(o.ListenAddr)
 		return s.ListenAndServe()
 	}
 	if o.CAFile != "" {

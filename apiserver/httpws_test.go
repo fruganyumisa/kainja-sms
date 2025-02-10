@@ -20,7 +20,7 @@ import (
 
 var deliverErr = make(chan error, 1)
 
-func (sm *SM) Deliver(args *DeliveryReceipt, resp *string) error {
+func (rpc *SM) Deliver(args *DeliveryReceipt, resp *string) error {
 	if args.Text != "delivery receipt here" {
 		deliverErr <- errors.New("unexpected delivery receipt")
 	}
