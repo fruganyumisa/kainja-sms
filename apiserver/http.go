@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"io"
+	"log"
 	"net/http"
 	"net/rpc"
 	"net/rpc/jsonrpc"
@@ -84,10 +85,12 @@ func (h *Handler) send() http.Handler {
 		err := r.ParseMultipartForm(1 << 20)
 		if err != nil {
 			h.Logger.Fatal().Str("Event", " Parsing Multipart Form error:").Msg(err.Error())
+			log.Printf("Error retrieving the  send Request %v", err)
 			return
 		}
 		resp, status, err := h.sm.submit(r.Form)
 		if err != nil {
+			log.Printf("Error on Sending SMS to SMSC: %v", err)
 			http.Error(w, err.Error(), status)
 			return
 		}
@@ -147,9 +150,18 @@ func (h *Handler) sse() http.Handler {
 		for {
 			select {
 			case r := <-dr:
-				fmt.Fprintf(w, "Data: ")
-				j.Encode(&r)
-				fmt.Fprintf(w, "\n")
+				_, err := fmt.Fprintf(w, "Data: ")
+				if err != nil {
+					return
+				}
+				err = j.Encode(&r)
+				if err != nil {
+					return
+				}
+				_, err = fmt.Fprintf(w, "\n")
+				if err != nil {
+					return
+				}
 				conn.Flush()
 			case <-stop:
 				return
@@ -178,9 +190,18 @@ func (h *Handler) wsrpcEvents() http.Handler {
 		defer h.pool.Unregister(id)
 		stop := make(chan struct{})
 		r, w := io.Pipe()
-		defer w.Close()
+		defer func(w *io.PipeWriter) {
+			err := w.Close()
+			if err != nil {
+				log.Printf("Error in websocket close function: %v", err)
+			}
+		}(w)
 		go func() {
-			io.Copy(w, ws)
+			i, err := io.Copy(w, ws)
+			if err != nil {
+				log.Printf("Copying error at instance %v with error %v", i, err)
+				return
+			}
 			close(stop)
 		}()
 		rwc := &conn{Reader: r, WriteCloser: ws}
