@@ -86,6 +86,7 @@ func (h *Handler) send() http.Handler {
 		if err != nil {
 			h.Logger.Fatal().Str("Event", " Parsing Multipart Form error:").Msg(err.Error())
 			log.Printf("Error retrieving the  send Request %v", err)
+			log.Printf("Request Received: %v", r.Form)
 			return
 		}
 		resp, status, err := h.sm.submit(r.Form)
@@ -97,10 +98,13 @@ func (h *Handler) send() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(resp)
 		if err != nil {
+			log.Printf("The encoding error: %v", err)
 			h.Logger.Fatal().Str("Event", "JSON Encoding error: ").Msg(err.Error())
 			return
 		}
+		log.Printf("The response we receive request: %v Status: %v ", r.Form, status)
 	}
+	log.Printf("The outcome of the handler function: %v", &f)
 	return auth(cors(f, "PUT", "POST"))
 }
 
