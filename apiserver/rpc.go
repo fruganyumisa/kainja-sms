@@ -65,6 +65,7 @@ func (rpc *SM) Submit(args *ShortMessage, resp *ShortMessageResp) error {
 	}
 	r, s, err := rpc.submit(req)
 	if err != nil {
+		fmt.Println(err)
 		rpc.Logger.Fatal().Str("Event", "SMS Submit to SMSC error:").Msg(err.Error())
 		return fmt.Errorf("%d %s: %v", s, http.StatusText(s), err)
 	}
@@ -83,6 +84,7 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 		{"register", "registered delivery", false, []string{"final", "failure"}, &register},
 	}
 	if err := f.Validate(req); err != nil {
+		fmt.Println(err)
 		log.Printf("Validating received form failed: %v", err)
 		rpc.Logger.Fatal().Str("Event", "Request form validation error: ").Msg(err.Error())
 		return nil, http.StatusBadRequest, err
@@ -103,12 +105,13 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 	}
 	sm, err = rpc.tx.Submit(sm)
 	if errors.Is(err, smpp.ErrNotConnected) {
+		fmt.Println(err)
 		log.Printf("Submit sms failed: %v", err)
 		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusServiceUnavailable, err
 	}
 	if err != nil {
-		log.Printf("Submit sms error: %v", err)
+		fmt.Println(err)
 		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusBadGateway, err
 	}
