@@ -4,9 +4,12 @@
 
 package apiserver
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // auth provides an authentication handler. Hook up your own stuff here. cool
 func auth(f http.HandlerFunc) http.HandlerFunc {
+	//log.Printf("Handler returned after authentication: %v", )
 	return f
 }

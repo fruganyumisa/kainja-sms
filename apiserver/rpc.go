@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
+	"log"
 	"net/http"
 	"net/rpc"
 	"net/url"
@@ -33,6 +34,7 @@ func NewSM(tx *smpp.Transceiver, rs *rpc.Server) *SM {
 	err := sm.rpc.Register(sm)
 	if err != nil {
 
+		log.Printf("Exception happened on registering for callback receipt: %v", err)
 		return nil
 	} // hax more
 	return sm
@@ -81,6 +83,7 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 		{"register", "registered delivery", false, []string{"final", "failure"}, &register},
 	}
 	if err := f.Validate(req); err != nil {
+		log.Printf("Validating received form failed: %v", err)
 		rpc.Logger.Fatal().Str("Event", "Request form validation error: ").Msg(err.Error())
 		return nil, http.StatusBadRequest, err
 	}
@@ -100,10 +103,12 @@ func (rpc *SM) submit(req url.Values) (resp *ShortMessageResp, status int, err e
 	}
 	sm, err = rpc.tx.Submit(sm)
 	if errors.Is(err, smpp.ErrNotConnected) {
+		log.Printf("Submit sms failed: %v", err)
 		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusServiceUnavailable, err
 	}
 	if err != nil {
+		log.Printf("Submit sms error: %v", err)
 		rpc.Logger.Fatal().Str("Event", "Submit sms error: ").Msg(err.Error())
 		return nil, http.StatusBadGateway, err
 	}
